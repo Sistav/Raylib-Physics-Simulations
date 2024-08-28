@@ -9,25 +9,25 @@ GAUSS = False
 
 NUM_FISH = 100
 FISH_LENGTH = 20
-MAX_LIFETIME = 20 
+MAX_LIFETIME = 20
 LIFETIME_INCREASE = 2
 ENABLE_BREEDING = True
 BREEDING_CHANCE = 0.01
-MUTATION_RANGE = 0.5 
-BREEDING_WINDOW = 5  
+MUTATION_RANGE = 0.5
+BREEDING_WINDOW = 5
 
 MIN_SPEED = 2
 MAX_SPEED = 4
 MIN_DETECTION_RANGE = 50
 MAX_DETECTION_RANGE = 100
+TURN_SPEED = .1
 
 MAX_PELLETS = 200
 PELLET_SPAWN_RATE = 0.4
 PELLET_SIZE = 2
 PELLET_EAT_DISTANCE = 5
 
-BREEDING_COOLDOWN = 5 
-
+BREEDING_COOLDOWN = 5
 class Pellet:
     def __init__(self, x=None, y=None):
         self.x = x if x is not None else random.randint(0, WIDTH)
@@ -39,6 +39,7 @@ class Pellet:
 
 class Fish:
     def __init__(self, detection_range=None, speed=None):
+        self.turn_speed = TURN_SPEED
         self.speed = speed if speed is not None else random.uniform(MIN_SPEED, MAX_SPEED)
         self.detection_range = detection_range if detection_range is not None else random.uniform(MIN_DETECTION_RANGE, MAX_DETECTION_RANGE)
         self.x = random.randint(0, WIDTH)
@@ -60,12 +61,12 @@ class Fish:
             dx, dy = self.calculate_shortest_distance(self.x, self.y, nearest_pellet.x, nearest_pellet.y)
             target_angle = math.atan2(dy, dx)
             angle_diff = (target_angle - self.angle + math.pi) % (2 * math.pi) - math.pi
-            self.angle += max(min(angle_diff, 0.1), -0.1)
+            self.angle += max(min(angle_diff,  self.turn_speed), -self.turn_speed)
 
         self.x = (self.x + self.speed * math.cos(self.angle)) % WIDTH
         self.y = (self.y + self.speed * math.sin(self.angle)) % HEIGHT
-
-        self.lifetime -= pr.get_frame_time()
+        if self.lifetime is not None:
+            self.lifetime -= pr.get_frame_time()
         if self.breeding_cooldown > 0:
             self.breeding_cooldown -= pr.get_frame_time()
 
@@ -120,14 +121,18 @@ class Fish:
         return nearest_pellet
 
     def is_dead(self):
-        return self.lifetime <= 0
+        if self.lifetime is None:
+            return False
+        else:
+            return self.lifetime <= 0
 
     def can_breed(self):
         return self.breeding_cooldown <= 0 and pr.get_time() - self.last_eat_time < BREEDING_WINDOW
 
     def eat(self):
         self.last_eat_time = pr.get_time()
-        self.lifetime += LIFETIME_INCREASE
+        if self.lifetime is not None:
+            self.lifetime += LIFETIME_INCREASE
 
 def check_fish_collision(fish1, fish2):
     dx, dy = fish1.calculate_shortest_distance(fish1.x, fish1.y, fish2.x, fish2.y)
@@ -179,7 +184,7 @@ def main():
         pr.begin_drawing()
         pr.clear_background(pr.BLACK)
 
-        if pr.is_mouse_button_pressed(pr.MOUSE_LEFT_BUTTON):
+        if pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON):
             mouse_x = pr.get_mouse_x()
             mouse_y = pr.get_mouse_y()
             if len(pellets) < MAX_PELLETS:
