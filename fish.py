@@ -154,8 +154,8 @@ def breed(fish1, fish2):
     max_parent_range = max(fish1.detection_range, fish2.detection_range)
     
     # Adjust min and max detection ranges based on mutation rate
-    adjusted_min_range = max(MIN_DETECTION_RANGE, min_parent_range * (1 - MUTATION_RANGE))
-    adjusted_max_range = min(MAX_DETECTION_RANGE, max_parent_range * (1 + MUTATION_RANGE))
+    adjusted_min_range =  min_parent_range * (1 - MUTATION_RANGE)
+    adjusted_max_range =  max_parent_range * (1 + MUTATION_RANGE)
     
     # Generate new detection range
     if GAUSS:
@@ -163,9 +163,6 @@ def breed(fish1, fish2):
     else:
         new_detection_range = random.uniform(adjusted_min_range, adjusted_max_range)
     
-    # Clamp new detection range to global min and max
-    new_detection_range = max(MIN_DETECTION_RANGE, min(MAX_DETECTION_RANGE, new_detection_range))
-
     new_fish = Fish(speed=new_speed, detection_range=new_detection_range)
     fish1.breeding_cooldown = BREEDING_COOLDOWN
     fish2.breeding_cooldown = BREEDING_COOLDOWN
