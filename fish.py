@@ -5,24 +5,28 @@ import math
 WIDTH = 800
 HEIGHT = 600
 
+GAUSS = False
+
 NUM_FISH = 100
 FISH_LENGTH = 20
-MAX_LIFETIME = 60 
+MAX_LIFETIME = 20 
 LIFETIME_INCREASE = 2
 ENABLE_BREEDING = True
-BREEDING_CHANCE = 0.001
-MUTATION_RANGE = 0.1 
-BREEDING_WINDOW = 10  
+BREEDING_CHANCE = 0.01
+MUTATION_RANGE = 0.5 
+BREEDING_WINDOW = 5  
 
-MIN_SPEED = 4
-MAX_SPEED = 8.0
-MIN_DETECTION_RANGE = 100
-MAX_DETECTION_RANGE = 300
+MIN_SPEED = 2
+MAX_SPEED = 4
+MIN_DETECTION_RANGE = 50
+MAX_DETECTION_RANGE = 100
 
 MAX_PELLETS = 200
 PELLET_SPAWN_RATE = 0.4
 PELLET_SIZE = 2
 PELLET_EAT_DISTANCE = 5
+
+BREEDING_COOLDOWN = 5 
 
 class Pellet:
     def __init__(self, x=None, y=None):
@@ -47,6 +51,8 @@ class Fish:
             255
         )
         self.lifetime = MAX_LIFETIME
+        self.last_eat_time = 0  # New attribute to track when the fish last ate
+        self.breeding_cooldown = 0  # New attribute for breeding cooldown
 
     def move(self, pellets):
         nearest_pellet = self.find_nearest_pellet(pellets)
@@ -60,6 +66,8 @@ class Fish:
         self.y = (self.y + self.speed * math.sin(self.angle)) % HEIGHT
 
         self.lifetime -= pr.get_frame_time()
+        if self.breeding_cooldown > 0:
+            self.breeding_cooldown -= pr.get_frame_time()
 
     def draw(self):
         end_x = self.x + FISH_LENGTH * math.cos(self.angle)
@@ -115,7 +123,11 @@ class Fish:
         return self.lifetime <= 0
 
     def can_breed(self):
-        return self.lifetime > MAX_LIFETIME - BREEDING_WINDOW
+        return self.breeding_cooldown <= 0 and pr.get_time() - self.last_eat_time < BREEDING_WINDOW
+
+    def eat(self):
+        self.last_eat_time = pr.get_time()
+        self.lifetime += LIFETIME_INCREASE
 
 def check_fish_collision(fish1, fish2):
     dx, dy = fish1.calculate_shortest_distance(fish1.x, fish1.y, fish2.x, fish2.y)
@@ -123,15 +135,41 @@ def check_fish_collision(fish1, fish2):
     return distance < FISH_LENGTH
 
 def breed(fish1, fish2):
-    avg_speed = (fish1.speed + fish2.speed) / 2
-    speed_mutation = random.gauss(0, avg_speed * MUTATION_RANGE)
-    new_speed = max(MIN_SPEED, min(MAX_SPEED, avg_speed + speed_mutation))
+    # Determine min and max speeds from parents
+    min_parent_speed = min(fish1.speed, fish2.speed)
+    max_parent_speed = max(fish1.speed, fish2.speed)
+    
+    # Adjust min and max speeds based on mutation rate
+    adjusted_min_speed = min_parent_speed * (1 - MUTATION_RANGE)
+    adjusted_max_speed = max_parent_speed * (1 + MUTATION_RANGE)
+    
+    # Generate new speed (unclamped)
+    if GAUSS:
+        new_speed = random.gauss((adjusted_min_speed + adjusted_max_speed) / 2, (adjusted_max_speed - adjusted_min_speed) / 4)
+    else:
+        new_speed = random.uniform(adjusted_min_speed, adjusted_max_speed)
+    
+    # Determine min and max detection ranges from parents
+    min_parent_range = min(fish1.detection_range, fish2.detection_range)
+    max_parent_range = max(fish1.detection_range, fish2.detection_range)
+    
+    # Adjust min and max detection ranges based on mutation rate
+    adjusted_min_range = max(MIN_DETECTION_RANGE, min_parent_range * (1 - MUTATION_RANGE))
+    adjusted_max_range = min(MAX_DETECTION_RANGE, max_parent_range * (1 + MUTATION_RANGE))
+    
+    # Generate new detection range
+    if GAUSS:
+        new_detection_range = random.gauss((adjusted_min_range + adjusted_max_range) / 2, (adjusted_max_range - adjusted_min_range) / 4)
+    else:
+        new_detection_range = random.uniform(adjusted_min_range, adjusted_max_range)
+    
+    # Clamp new detection range to global min and max
+    new_detection_range = max(MIN_DETECTION_RANGE, min(MAX_DETECTION_RANGE, new_detection_range))
 
-    avg_range = (fish1.detection_range + fish2.detection_range) / 2
-    range_mutation = random.gauss(0, avg_range * MUTATION_RANGE)
-    new_detection_range = max(MIN_DETECTION_RANGE, min(MAX_DETECTION_RANGE, avg_range + range_mutation))
-
-    return Fish(speed=new_speed, detection_range=new_detection_range)
+    new_fish = Fish(speed=new_speed, detection_range=new_detection_range)
+    fish1.breeding_cooldown = BREEDING_COOLDOWN
+    fish2.breeding_cooldown = BREEDING_COOLDOWN
+    return new_fish
 
 def main():
     pr.init_window(WIDTH, HEIGHT, "Fish")
@@ -163,7 +201,7 @@ def main():
                 dx, dy = fish.calculate_shortest_distance(fish.x, fish.y, pellet.x, pellet.y)
                 if math.sqrt(dx**2 + dy**2) < PELLET_EAT_DISTANCE:
                     pellets_to_remove.add(pellet)
-                    fish.lifetime += LIFETIME_INCREASE
+                    fish.eat()
                     break
 
         pellets = [p for p in pellets if p not in pellets_to_remove]
@@ -175,7 +213,7 @@ def main():
         if ENABLE_BREEDING:
             for i, fish1 in enumerate(fish_population):
                 for fish2 in fish_population[i+1:]:
-                    if check_fish_collision(fish1, fish2) and random.random() < BREEDING_CHANCE:
+                    if check_fish_collision(fish1, fish2) and fish1.can_breed() and fish2.can_breed() and random.random() < BREEDING_CHANCE:
                         new_fish.append(breed(fish1, fish2))
 
         fish_population = [fish for fish in fish_population if not fish.is_dead()]
